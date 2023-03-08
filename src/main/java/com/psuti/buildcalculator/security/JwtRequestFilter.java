@@ -1,0 +1,93 @@
+package com.psuti.buildcalculator.security;
+
+import com.psuti.buildcalculator.service.impl.JwtTokenService;
+import com.psuti.buildcalculator.service.impl.UserDetailsServiceImpl;
+import com.psuti.buildcalculator.util.TokenParseFromRequestUtil;
+import io.jsonwebtoken.ExpiredJwtException;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
+
+@Component
+public class JwtRequestFilter extends OncePerRequestFilter {
+    private final TokenParseFromRequestUtil tokenParseFromRequestUtil;
+    private final JwtTokenService jwtTokenService;
+    private final UserDetailsServiceImpl userDetailsService;
+
+    @Autowired
+    public JwtRequestFilter(TokenParseFromRequestUtil tokenParseFromRequestUtil,
+                            JwtTokenService jwtTokenService, UserDetailsServiceImpl userDetailsService) {
+        this.tokenParseFromRequestUtil = tokenParseFromRequestUtil;
+        this.jwtTokenService = jwtTokenService;
+        this.userDetailsService = userDetailsService;
+    }
+    @Override
+    protected void doFilterInternal(HttpServletRequest request,
+                                    HttpServletResponse response,
+                                    FilterChain chain)
+            throws ServletException, IOException {
+        String jwtToken = tryGetToken(request);
+        try {
+            tryAuthenticate(request,jwtToken);
+        } catch (IllegalArgumentException e) {
+            System.out.println("Unable to get JWT Token");
+        } catch (ExpiredJwtException e) {
+            System.out.println("JWT Token has expired");
+            System.out.println("Refreshing token");
+            tryAuthenticate(request,
+                    jwtTokenService
+                            .refreshToken(jwtToken)
+                            .getValue());
+        }
+        chain.doFilter(request, response);
+    }
+    private void tryAuthenticate(HttpServletRequest request, String jwtToken){
+        Integer userId = jwtTokenService.getIdFromToken(jwtToken);
+        if (SecurityContextHolder.getContext().getAuthentication() == null
+                && jwtTokenService.tokenExists(jwtToken)) {
+            if (jwtTokenService.validateToken(jwtToken, userId)) {
+                authenticate(
+                        userDetailsService.loadUserById(userId),
+                        request
+                );
+                System.out.println("in filter: " + SecurityContextHolder.getContext().getAuthentication());
+            }
+
+        }
+    }
+
+    private String tryGetToken(HttpServletRequest request){
+        String jwtToken;
+        try {
+            jwtToken = tokenParseFromRequestUtil.parse(request);
+        }
+        catch (IllegalArgumentException e){
+            jwtToken = null;
+        }
+        return jwtToken;
+    }
+
+    private void authenticate(UserDetails user, HttpServletRequest request){
+        UsernamePasswordAuthenticationToken usernamePasswordAuthenticationToken =
+                new UsernamePasswordAuthenticationToken(
+                        user,
+                        null,
+                        user.getAuthorities()
+                );
+        usernamePasswordAuthenticationToken.setDetails(
+                new WebAuthenticationDetailsSource().buildDetails(request)
+        );
+        SecurityContextHolder.getContext()
+                .setAuthentication(usernamePasswordAuthenticationToken);
+    }
+}
