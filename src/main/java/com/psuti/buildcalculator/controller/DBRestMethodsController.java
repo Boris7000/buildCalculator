@@ -1,6 +1,7 @@
 package com.psuti.buildcalculator.controller;
 
 import com.psuti.buildcalculator.dao.CalculationStateRepository;
+import com.psuti.buildcalculator.dao.MeasurementUnitRepository;
 import com.psuti.buildcalculator.dao.UserPostRepository;
 import com.psuti.buildcalculator.dao.UserStateRepository;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -22,13 +23,18 @@ public class DBRestMethodsController {
 
     private final CalculationStateRepository calculationStateRepository;
 
+    private final MeasurementUnitRepository measurementUnitRepository;
+
+
     @Autowired
     public DBRestMethodsController(UserStateRepository userStateRepository,
                                    UserPostRepository userPostRepository,
-                                   CalculationStateRepository calculationStateRepository){
+                                   CalculationStateRepository calculationStateRepository,
+                                   MeasurementUnitRepository measurementUnitRepository){
         this.userStateRepository = userStateRepository;
         this.userPostRepository = userPostRepository;
         this.calculationStateRepository = calculationStateRepository;
+        this.measurementUnitRepository = measurementUnitRepository;
     }
 
     @GetMapping("db.getAllExistingUserPosts")
@@ -49,6 +55,13 @@ public class DBRestMethodsController {
     public Map<String, Object> getAllExistingCalculatingStates(){
         HashMap<String, Object> responseMap = new HashMap<>();
         responseMap.put("response", wrapInItem(calculationStateRepository.findAll(),"items"));
+        return responseMap;
+    }
+
+    @GetMapping("db.getAllExistingMeasurementUnits")
+    public Map<String, Object> getAllExistingMeasurementUnits(){
+        HashMap<String, Object> responseMap = new HashMap<>();
+        responseMap.put("response", wrapInItem(measurementUnitRepository.findAll(),"items"));
         return responseMap;
     }
 
